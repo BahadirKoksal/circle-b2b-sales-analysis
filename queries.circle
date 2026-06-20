@@ -1,0 +1,137 @@
+-- ============================================
+-- Circle B2B Sales Analysis - SQL Queries
+-- ============================================
+
+-- ============================================
+-- STEP 1: DATA EXPLORATION
+-- ============================================
+
+-- General overview
+SELECT * FROM course15.cc_funnel LIMIT 10;
+
+-- Total row count
+SELECT COUNT(*) AS total_rows FROM course15.cc_funnel;
+
+-- Primary key check
+SELECT 
+  COUNT(*) AS total_rows,
+  COUNT(DISTINCT company) AS unique_companies
+FROM course15.cc_funnel;
+
+-- Find duplicate/null records
+SELECT company, COUNT(*) AS count
+FROM course15.cc_funnel
+GROUP BY company
+HAVING COUNT(*) > 1;
+
+-- Valid records count
+SELECT COUNT(*) 
+FROM course15.cc_funnel 
+WHERE company IS NOT NULL;
+
+-- ============================================
+-- STEP 2: DATA ENRICHMENT
+-- ============================================
+
+-- Create cc_funnel_kpi table with deal_stage column
+CREATE TABLE course15.cc_funnel_kpi AS
+SELECT
+  company, sector, date_lead, date_opportunity,
+  date_customer, date_lost, priority,
+  CASE
+    WHEN date_customer IS NOT NULL THEN '3-Customer'
+    WHEN date_lost IS NOT NULL THEN '4-Lost'
+    WHEN date_opportunity IS NOT NULL THEN '2-Opportunity'
+    ELSE '1-LEAD'
+  END AS deal_stage
+FROM course15.cc_funnel
+WHERE company IS NOT NULL;
+
+-- Verify primary key
+SELECT COUNT(*) FROM course15.cc_funnel_kpi;
+
+-- Verify no NULL deal_stage
+SELECT COUNT(*) 
+FROM course15.cc_funnel_kpi 
+WHERE deal_stage IS NULL;
+
+-- ============================================
+-- STEP 3: FUNNEL OVERVIEW
+-- ============================================
+
+-- Global funnel view
+SELECT
+  deal_stage,
+  COUNT(*) AS nb_prospect
+FROM course15.cc_funnel_kpi
+GROUP BY deal_stage
+ORDER BY deal_stage;
+
+-- Funnel by priority
+SELECT
+  deal_stage,
+  priority,
+  COUNT(*) AS nb_prospect
+FROM course15.cc_funnel_kpi
+GROUP BY deal_stage, priority
+ORDER BY deal_stage, priority;
+
+-- Funnel by priority (pivot - BONUS)
+SELECT
+  priority,
+  COUNTIF(deal_stage = '1-LEAD') AS lead,
+  COUNTIF(deal_stage = '2-Opportunity') AS opportunity,
+  COUNTIF(deal_stage = '3-Customer') AS customer,
+  COUNTIF(deal_stage = '4-Lost') AS lost
+FROM course15.cc_funnel_kpi
+GROUP BY priority
+ORDER BY priority;
+
+-- ============================================
+-- STEP 4: FUNNEL KPIs
+-- ============================================
+
+-- Global KPIs
+SELECT
+  COUNT(*) AS nb_lead,
+  COUNTIF(date_opportunity IS NOT NULL) AS nb_opportunity,
+  COUNTIF(date_customer IS NOT NULL) AS nb_customer,
+  ROUND(COUNTIF(date_opportunity IS NOT NULL) / COUNT(*) * 100, 1) AS L2O,
+  ROUND(COUNTIF(date_customer IS NOT NULL) / COUNT(*) * 100, 1) AS L2C,
+  ROUND(COUNTIF(date_customer IS NOT NULL) / COUNTIF(date_opportunity IS NOT NULL) * 100, 1) AS O2W,
+  ROUND(AVG(DATE_DIFF(date_opportunity, date_lead, DAY)), 1) AS avg_days_L2O,
+  ROUND(AVG(DATE_DIFF(date_customer, date_lead, DAY)), 1) AS avg_days_L2C,
+  ROUND(AVG(DATE_DIFF(date_customer, date_opportunity, DAY)), 1) AS avg_days_O2W
+FROM course15.cc_funnel_kpi;
+
+-- KPIs by priority
+SELECT
+  priority,
+  COUNT(*) AS nb_lead,
+  COUNTIF(date_opportunity IS NOT NULL) AS nb_opportunity,
+  COUNTIF(date_customer IS NOT NULL) AS nb_customer,
+  ROUND(COUNTIF(date_opportunity IS NOT NULL) / COUNT(*) * 100, 1) AS L2O,
+  ROUND(COUNTIF(date_customer IS NOT NULL) / COUNT(*) * 100, 1) AS L2C,
+  ROUND(COUNTIF(date_customer IS NOT NULL) / COUNTIF(date_opportunity IS NOT NULL) * 100, 1) AS O2W,
+  ROUND(AVG(DATE_DIFF(date_opportunity, date_lead, DAY)), 1) AS avg_days_L2O,
+  ROUND(AVG(DATE_DIFF(date_customer, date_lead, DAY)), 1) AS avg_days_L2C,
+  ROUND(AVG(DATE_DIFF(date_customer, date_opportunity, DAY)), 1) AS avg_days_O2W
+FROM course15.cc_funnel_kpi
+GROUP BY priority
+ORDER BY priority;
+
+-- KPIs by month
+SELECT
+  FORMAT_DATE('%Y-%m', date_lead) AS month,
+  COUNT(*) AS nb_lead,
+  COUNTIF(date_opportunity IS NOT NULL) AS nb_opportunity,
+  COUNTIF(date_customer IS NOT NULL) AS nb_customer,
+  ROUND(COUNTIF(date_opportunity IS NOT NULL) / COUNT(*) * 100, 1) AS L2O,
+  ROUND(COUNTIF(date_customer IS NOT NULL) / COUNT(*) * 100, 1) AS L2C,
+  ROUND(COUNTIF(date_customer IS NOT NULL) / COUNTIF(date_opportunity IS NOT NULL) * 100, 1) AS O2W,
+  ROUND(AVG(DATE_DIFF(date_opportunity, date_lead, DAY)), 1) AS avg_days_L2O,
+  ROUND(AVG(DATE_DIFF(date_customer, date_lead, DAY)), 1) AS avg_days_L2C,
+  ROUND(AVG(DATE_DIFF(date_customer, date_opportunity, DAY)), 1) AS avg_days_O2W
+FROM course15.cc_funnel_kpi
+GROUP BY month
+ORDER BY month;
